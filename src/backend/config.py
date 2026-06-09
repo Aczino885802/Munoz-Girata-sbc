@@ -2,9 +2,6 @@
 # config.py - Configuracion central del sistema
 # Maderas Gerardo - Sistema Experto de Cotizacion
 # =============================================================================
-# Todas las constantes del sistema en un solo lugar.
-# Para produccion, usar variables de entorno con python-dotenv.
-# =============================================================================
 
 import os
 
@@ -15,7 +12,6 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8000))
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
 
-# Origenes permitidos para CORS (frontend React)
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
     "http://localhost:5173,http://localhost:3000"
@@ -45,7 +41,6 @@ TIEMPOS_ENTREGA = {
     "es_estante": { "min": 2,  "max": 5  },
 }
 
-# Multiplicador de tiempo segun material
 MULTIPLICADOR_TIEMPO_MATERIAL = {
     "material_mdf":     1.0,
     "material_triplex": 1.0,
@@ -56,8 +51,6 @@ MULTIPLICADOR_TIEMPO_MATERIAL = {
 # -----------------------------------------------------------------------------
 # LOGICA DE NEGOCIO - Compatibilidades y advertencias
 # -----------------------------------------------------------------------------
-
-# Combinaciones que generan advertencia (no invalidas, solo recomendacion)
 ADVERTENCIAS_COMBINACION = {
     ("material_mdf", "acabado_barniz"): (
         "El barniz no resalta bien en MDF porque no tiene veta natural. "
@@ -77,7 +70,6 @@ ADVERTENCIAS_COMBINACION = {
     ),
 }
 
-# Extras que no aplican a ciertos tipos de mueble
 EXTRAS_NO_APLICAN = {
     "es_puerta":  ["tiene_cajones", "puertas_corredizas"],
     "es_mesa":    ["puertas_corredizas", "tiene_espejo"],
@@ -86,17 +78,16 @@ EXTRAS_NO_APLICAN = {
 }
 
 # -----------------------------------------------------------------------------
-# RANGOS DE PRECIO NUMERICOS (para calculos internos)
+# RANGOS DE PRECIO NUMERICOS (en pesos colombianos COP)
 # -----------------------------------------------------------------------------
 RANGOS_NUMERICOS = {
-    "precio_muy_bajo": { "min": 60,   "max": 150  },
-    "precio_bajo":     { "min": 150,  "max": 350  },
-    "precio_medio":    { "min": 350,  "max": 700  },
-    "precio_alto":     { "min": 700,  "max": 1200 },
-    "precio_muy_alto": { "min": 1200, "max": 2000 },
+    "precio_muy_bajo": { "min": 80000,   "max": 300000  },
+    "precio_bajo":     { "min": 300000,  "max": 600000  },
+    "precio_medio":    { "min": 600000,  "max": 900000  },
+    "precio_alto":     { "min": 900000,  "max": 1500000 },
+    "precio_muy_alto": { "min": 1500000, "max": 3000000 },
 }
 
-# Porcentajes del desglose de precio
 PORCENTAJES_DESGLOSE = {
     "materiales": 0.40,
     "mano_obra":  0.38,
@@ -104,16 +95,15 @@ PORCENTAJES_DESGLOSE = {
     "extras":     0.08,
 }
 
-# Recargo por urgencia
 RECARGO_URGENCIA = 0.20
 
-# Recargo por instalacion local
-RECARGO_INSTALACION_LOCAL = 55   # USD promedio
-RECARGO_INSTALACION_CIUDAD = 115  # USD promedio fuera de ciudad
+# Recargo por instalacion (COP)
+RECARGO_INSTALACION_LOCAL  = 80000
+RECARGO_INSTALACION_CIUDAD = 180000
 
-# Costo adicional por vidrio
-COSTO_VIDRIO_MIN = 50
-COSTO_VIDRIO_MAX = 150
+# Costo adicional por vidrio (COP)
+COSTO_VIDRIO_MIN = 60000
+COSTO_VIDRIO_MAX = 200000
 
 # -----------------------------------------------------------------------------
 # MENSAJES DE WHATSAPP
