@@ -1,14 +1,11 @@
 # =============================================================================
 # services/cotizacion_service.py - Logica de negocio
 # =============================================================================
-# Esta capa no conoce HTTP ni FastAPI.
-# Solo recibe datos, aplica reglas de negocio y retorna resultados.
-# =============================================================================
 
 import sys, os, math, urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from knowledge.base_conocimiento import RANGOS_PRECIO
+from knowledge.base_conocimiento import RANGOS_PRECIO, PRECIOS_BASE
 from knowledge.motor_inferencia  import encadenamiento_adelante, generar_resumen
 from config import (
     TIEMPOS_ENTREGA, MULTIPLICADOR_TIEMPO_MATERIAL,
@@ -23,7 +20,6 @@ from models.schemas import (
 )
 
 
-# Labels legibles para WhatsApp y notificaciones
 TIPO_LABELS = {
     "es_puerta":  "Puerta",
     "es_closet":  "Closet / Armario",
@@ -55,6 +51,22 @@ EXTRA_LABELS = {
     "fuera_de_ciudad":      "Fuera de ciudad",
 }
 
+# Mapa tipo -> clave para PRECIOS_BASE
+TIPO_KEY = {
+    "es_puerta":  "puerta",
+    "es_closet":  "closet",
+    "es_cocina":  "cocina",
+    "es_cama":    "cama",
+    "es_mesa":    "mesa",
+    "es_estante": "estante",
+}
+MATERIAL_KEY = {
+    "material_mdf":     "mdf",
+    "material_triplex": "triplex",
+    "material_solida":  "solida",
+    "material_pino":    "pino",
+}
+
 
 def procesar_cotizacion(
     tipo_mueble: str,
@@ -62,10 +74,6 @@ def procesar_cotizacion(
     acabado:     str,
     extras:      list,
 ) -> CotizacionResponse:
-    """
-    Punto de entrada del servicio de cotizacion.
-    Orquesta el motor de inferencia y aplica logica de negocio adicional.
-    """
 
     # 1. Filtrar extras que no aplican al tipo seleccionado
     extras_invalidos = EXTRAS_NO_APLICAN.get(tipo_mueble, [])
@@ -78,8 +86,10 @@ def procesar_cotizacion(
     resultado = encadenamiento_adelante(hechos)
     resumen   = generar_resumen(resultado, hechos)
 
-    # 4. Calcular desglose de precio
+    # 4. Calcular desglose de precio usando PRECIOS_BASE por tipo+material
     desglose = _calcular_desglose(
+        tipo_mueble  = tipo_mueble,
+        material     = material,
         precio_key   = resumen.get("precio_key", ""),
         extras       = extras_limpios,
         es_urgente   = "es_urgente" in extras_limpios,
@@ -144,20 +154,37 @@ def _construir_hechos(tipo, material, acabado, extras):
 
 
 def _calcular_desglose(
-    precio_key, extras, es_urgente,
-    instalacion, fuera_ciudad, tiene_vidrio
+    tipo_mueble, material, precio_key, extras,
+    es_urgente, instalacion, fuera_ciudad, tiene_vidrio
 ):
-    rango  = RANGOS_NUMERICOS.get(precio_key, {"min": 0, "max": 0})
-    base   = int((rango["min"] + rango["max"]) / 2)
+    # Intentar usar PRECIOS_BASE especifico por tipo+material
+    tipo_k     = TIPO_KEY.get(tipo_mueble, "")
+    material_k = MATERIAL_KEY.get(material, "")
+    clave_base = f"{tipo_k}_{material_k}"
+    precio_base = PRECIOS_BASE.get(clave_base)
+
+    if precio_base:
+        # Usar el precio especifico del tipo+material
+        base_min = precio_base["min"]
+        base_max = precio_base["max"]
+    else:
+        # Fallback al rango generico
+        rango    = RANGOS_NUMERICOS.get(precio_key, {"min": 0, "max": 0})
+        base_min = rango["min"]
+        base_max = rango["max"]
+
+    base = int((base_min + base_max) / 2)
 
     # Aplicar recargo por urgencia
     if es_urgente:
-        base = int(base * (1 + RECARGO_URGENCIA))
+        base     = int(base * (1 + RECARGO_URGENCIA))
+        base_min = int(base_min * (1 + RECARGO_URGENCIA))
+        base_max = int(base_max * (1 + RECARGO_URGENCIA))
 
-    mat   = int(base * PORCENTAJES_DESGLOSE["materiales"])
-    mano  = int(base * PORCENTAJES_DESGLOSE["mano_obra"])
-    ac    = int(base * PORCENTAJES_DESGLOSE["acabado"])
-    ext   = int(base * PORCENTAJES_DESGLOSE["extras"])
+    mat  = int(base * PORCENTAJES_DESGLOSE["materiales"])
+    mano = int(base * PORCENTAJES_DESGLOSE["mano_obra"])
+    ac   = int(base * PORCENTAJES_DESGLOSE["acabado"])
+    ext  = int(base * PORCENTAJES_DESGLOSE["extras"])
 
     # Agregar costo de instalacion
     if instalacion:
@@ -168,19 +195,13 @@ def _calcular_desglose(
     if tiene_vidrio:
         ext += int((COSTO_VIDRIO_MIN + COSTO_VIDRIO_MAX) / 2)
 
-    total_min = rango["min"]
-    total_max = rango["max"]
-    if es_urgente:
-        total_min = int(total_min * (1 + RECARGO_URGENCIA))
-        total_max = int(total_max * (1 + RECARGO_URGENCIA))
-
     return Desglose(
         materiales = mat,
         mano_obra  = mano,
         acabado    = ac,
         extras     = ext,
-        total_min  = total_min,
-        total_max  = total_max,
+        total_min  = base_min,
+        total_max  = base_max,
     )
 
 
@@ -191,8 +212,6 @@ def _calcular_tiempo(tipo, material, extras):
     dias_min = math.ceil(base["min"] * mult)
     dias_max = math.ceil(base["max"] * mult)
 
-    # Urgente no cambia el tiempo real, solo el precio
-    # Extras complejos agregan tiempo
     if "tiene_cajones" in extras:
         dias_min += 2
         dias_max += 3
