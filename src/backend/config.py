@@ -119,4 +119,4 @@ WHATSAPP_MENSAJE_TEMPLATE = (
     "⏱ *Tiempo estimado:* {tiempo} dias\n\n"
     "{advertencias}"
     "Quedo atento a su respuesta. Gracias."
-)
+)   
